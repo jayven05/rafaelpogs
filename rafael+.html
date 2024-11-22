@@ -1,0 +1,349 @@
+<html><head><base href="." />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Snake Game - Classic & Campaign</title>
+<style>
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    color: #fff;
+    font-family: Arial, sans-serif;
+    position: relative;
+    overflow: hidden;
+}
+
+body::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    height: 60%;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60"><path d="M50 0C22.4 0 0 13.4 0 30c0 11.7 12.4 21.9 30 26.5 2.5 5.3 6.8 3.5 20 3.5s17.5 1.8 20-3.5c17.6-4.6 30-14.8 30-26.5 0-16.6-22.4-30-50-30zm0 10c13.8 0 25 6.7 25 15s-11.2 15-25 15-25-6.7-25-15 11.2-15 25-15z" fill="rgba(78, 204, 163, 0.1)"/></svg>') center/contain no-repeat;
+    z-index: -1;
+}
+
+#game-container {
+    position: relative;
+}
+
+#game-board {
+    border: 2px solid #4ecca3;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.score-board {
+    font-size: 24px;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.game-over {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    display: none;
+    background: rgba(0, 0, 0, 0.9);
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.restart-btn, .mode-btn {
+    padding: 10px 20px;
+    font-size: 18px;
+    background: #4ecca3;
+    border: none;
+    border-radius: 5px;
+    color: #1a1a2e;
+    cursor: pointer;
+    transition: transform 0.2s;
+    margin: 5px;
+}
+
+.restart-btn:hover, .mode-btn:hover {
+    transform: scale(1.1);
+}
+
+.mode-selector {
+    margin-bottom: 20px;
+}
+
+.level-info {
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+.active-mode {
+    background: #2a9d8f;
+}
+
+.countdown {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 72px;
+    font-weight: bold;
+    color: #4ecca3;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    display: none;
+}
+</style>
+</head>
+<body>
+    <div class="mode-selector">
+        <button class="mode-btn active-mode" id="classic-btn" onclick="setGameMode('classic')">Classic Mode</button>
+        <button class="mode-btn" id="campaign-btn" onclick="setGameMode('campaign')">Campaign Mode</button>
+    </div>
+    <div class="level-info" id="level-info">Level: 1</div>
+    <div class="score-board">Score: <span id="score">0</span></div>
+    <div id="game-container">
+        <canvas id="game-board" width="400" height="400"></canvas>
+        <div class="countdown" id="countdown">3</div>
+        <div class="game-over" id="game-over">
+            <h2>Game Over!</h2>
+            <p id="final-score"></p>
+            <button class="restart-btn" onclick="restartGame()">Play Again</button>
+        </div>
+    </div>
+
+<script>
+const canvas = document.getElementById('game-board');
+const ctx = canvas.getContext('2d');
+const scoreElement = document.getElementById('score');
+const gameOverElement = document.getElementById('game-over');
+const levelInfoElement = document.getElementById('level-info');
+const finalScoreElement = document.getElementById('final-score');
+const countdownElement = document.getElementById('countdown');
+
+const gridSize = 20;
+const tileCount = canvas.width / gridSize;
+
+let snake = [{x: 10, y: 10}];
+let food = {x: 15, y: 15};
+let blockages = [];
+let dx = 0;
+let dy = 0;
+let score = 0;
+let gameLoop;
+let gameMode = 'classic';
+let level = 1;
+let gameSpeed = 100;
+let requiredScore = 50;
+let isGameRunning = false;
+
+function startCountdown() {
+    let count = 3;
+    countdownElement.style.display = 'block';
+    countdownElement.textContent = count;
+
+    const countdown = setInterval(() => {
+        count--;
+        if (count > 0) {
+            countdownElement.textContent = count;
+        } else {
+            clearInterval(countdown);
+            countdownElement.style.display = 'none';
+            startGame();
+        }
+    }, 1000);
+}
+
+function startGame() {
+    isGameRunning = true;
+    if (gameMode === 'campaign') {
+        generateBlockages();
+    }
+    generateFood();
+    gameLoop = setInterval(update, gameSpeed);
+}
+
+function generateBlockages() {
+    blockages = [];
+    const numBlockages = Math.min(level, 5);
+    for (let i = 0; i < numBlockages; i++) {
+        let blockage;
+        do {
+            blockage = {
+                x: Math.floor(Math.random() * tileCount),
+                y: Math.floor(Math.random() * tileCount)
+            };
+        } while (
+            (blockage.x === snake[0].x && blockage.y === snake[0].y) ||
+            (blockage.x === food.x && blockage.y === food.y) ||
+            blockages.some(b => b.x === blockage.x && b.y === blockage.y)
+        );
+        blockages.push(blockage);
+    }
+}
+
+function setGameMode(mode) {
+    gameMode = mode;
+    document.getElementById('classic-btn').classList.toggle('active-mode', mode === 'classic');
+    document.getElementById('campaign-btn').classList.toggle('active-mode', mode === 'campaign');
+    levelInfoElement.style.display = mode === 'campaign' ? 'block' : 'none';
+    restartGame();
+}
+
+document.addEventListener('keydown', (e) => {
+    if (!isGameRunning) return;
+    
+    switch(e.key) {
+        case 'ArrowUp':
+            if (dy !== 1) { dx = 0; dy = -1; }
+            break;
+        case 'ArrowDown':
+            if (dy !== -1) { dx = 0; dy = 1; }
+            break;
+        case 'ArrowLeft':
+            if (dx !== 1) { dx = -1; dy = 0; }
+            break;
+        case 'ArrowRight':
+            if (dx !== -1) { dx = 1; dy = 0; }
+            break;
+    }
+});
+
+function drawSnake() {
+    ctx.fillStyle = '#4ecca3';
+    snake.forEach(segment => {
+        ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+    });
+}
+
+function drawFood() {
+    ctx.fillStyle = '#e84545';
+    ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 2, gridSize - 2);
+}
+
+function drawBlockages() {
+    if (gameMode === 'campaign') {
+        ctx.fillStyle = '#f39c12';
+        blockages.forEach(blockage => {
+            ctx.fillRect(blockage.x * gridSize, blockage.y * gridSize, gridSize - 2, gridSize - 2);
+        });
+    }
+}
+
+function moveSnake() {
+    const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+    snake.unshift(head);
+
+    if (head.x === food.x && head.y === food.y) {
+        score += 10;
+        scoreElement.textContent = score;
+        generateFood();
+        
+        if (gameMode === 'campaign' && score >= requiredScore) {
+            levelUp();
+        }
+    } else {
+        snake.pop();
+    }
+}
+
+function levelUp() {
+    level++;
+    requiredScore += 50;
+    gameSpeed = Math.max(50, gameSpeed - 10);
+    levelInfoElement.textContent = `Level: ${level}`;
+    generateBlockages();
+    clearInterval(gameLoop);
+    gameLoop = setInterval(update, gameSpeed);
+}
+
+function generateFood() {
+    do {
+        food = {
+            x: Math.floor(Math.random() * tileCount),
+            y: Math.floor(Math.random() * tileCount)
+        };
+    } while (
+        snake.some(segment => segment.x === food.x && segment.y === food.y) ||
+        (gameMode === 'campaign' && blockages.some(b => b.x === food.x && b.y === food.y))
+    );
+}
+
+function checkCollision() {
+    const head = snake[0];
+    
+    if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+        return true;
+    }
+    
+    for (let i = 1; i < snake.length; i++) {
+        if (head.x === snake[i].x && head.y === snake[i].y) {
+            return true;
+        }
+    }
+
+    if (gameMode === 'campaign') {
+        if (blockages.some(b => b.x === head.x && b.y === head.y)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+function gameOver() {
+    isGameRunning = false;
+    clearInterval(gameLoop);
+    gameOverElement.style.display = 'block';
+    finalScoreElement.textContent = gameMode === 'campaign' 
+        ? `Final Score: ${score} | Level: ${level}` 
+        : `Final Score: ${score}`;
+}
+
+function restartGame() {
+    snake = [{x: 10, y: 10}];
+    dx = 0;
+    dy = 0;
+    score = 0;
+    level = 1;
+    gameSpeed = 100;
+    requiredScore = 50;
+    scoreElement.textContent = score;
+    levelInfoElement.textContent = `Level: ${level}`;
+    gameOverElement.style.display = 'none';
+    
+    if (gameLoop) clearInterval(gameLoop);
+    
+    levelInfoElement.style.display = gameMode === 'campaign' ? 'block' : 'none';
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawFood();
+    drawSnake();
+    if (gameMode === 'campaign') {
+        drawBlockages();
+    }
+    
+    startCountdown();
+}
+
+function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    moveSnake();
+    
+    if (checkCollision()) {
+        gameOver();
+        return;
+    }
+    
+    drawBlockages();
+    drawFood();
+    drawSnake();
+}
+
+setGameMode('classic');
+</script>
+</body></html>
